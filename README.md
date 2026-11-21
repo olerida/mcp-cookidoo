@@ -93,6 +93,23 @@ uv run fastmcp dev inspector fastmcp.json           # MCP Inspector
 | `upload_custom_recipe` | Create a custom recipe from that JSON |
 | `update_custom_recipe` | Replace an existing custom recipe with that JSON |
 
+## Shopping list
+
+The shopping list tools provide access to recipe ingredients, associated recipes and manually added items. Use `get_shopping_list` to obtain IDs and checked (`is_owned`) status before editing.
+
+| Tool | Description |
+|---|---|
+| `get_shopping_list` | Read ingredients, additional items and recipes |
+| `add_shopping_items` | Add manual items |
+| `rename_shopping_item` | Rename a manual item |
+| `set_shopping_items_owned` | Mark ingredients or manual items as owned or needed |
+| `remove_shopping_items` | Remove manual items by ID |
+| `add_recipes_to_shopping_list` | Add ingredients from catalogue or custom recipes |
+| `remove_recipes_from_shopping_list` | Remove ingredients for catalogue or custom recipes |
+| `clear_shopping_list` | Remove the entire shopping list |
+
+Recipe ingredients cannot be renamed or removed individually through these tools; remove their recipe instead. Availability of custom recipe operations may depend on the account. This integration uses an unofficial API and may break if Cookidoo changes.
+
 ## Recipe steps
 
 A step is either plain text, or an object with Thermomix settings preset in guided cooking

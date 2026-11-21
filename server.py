@@ -9,6 +9,7 @@ import re
 import tomllib
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from dataclasses import asdict, replace
 from pathlib import Path
 
 from fastmcp import FastMCP
@@ -325,6 +326,147 @@ async def update_custom_recipe(recipe_id: str, recipe_json: str) -> str:
     except Exception as e:
         raise ToolError(f"Update failed: {e}") from e
     return f"Recipe '{updated.name}' updated.\nRecipe ID: {updated.id}\nURL: {updated.url}"
+
+
+@mcp.tool(annotations=READ_ONLY)
+async def get_shopping_list() -> str:
+    """Get shopping list ingredients, additional items, and associated recipes as JSON.
+
+    Item IDs and is_owned status can be used with the shopping list editing tools.
+    """
+    try:
+        api = await _get_service().client()
+        data = {
+            "ingredients": [asdict(x) for x in await api.get_ingredient_items()],
+            "additional_items": [asdict(x) for x in await api.get_additional_items()],
+            "recipes": [asdict(x) for x in await api.get_shopping_list_recipes()],
+        }
+        return json.dumps(data, ensure_ascii=False, default=str)
+    except Exception as e:
+        raise ToolError(f"Failed to get shopping list: {e}") from e
+
+
+@mcp.tool(annotations=WRITE)
+async def add_shopping_items(names: list[str]) -> str:
+    """Add manually entered items to the shopping list."""
+    if not names or any(not name.strip() for name in names):
+        raise ToolError("Provide non-empty item names.")
+    try:
+        api = await _get_service().client()
+        return json.dumps(
+            [asdict(x) for x in await api.add_additional_items(names)], ensure_ascii=False
+        )
+    except Exception as e:
+        raise ToolError(f"Failed to add items: {e}") from e
+
+
+@mcp.tool(annotations=WRITE)
+async def set_shopping_items_owned(ids: list[str], owned: bool, item_type: str) -> str:
+    """Mark items as owned/checked or needed. item_type is 'ingredient' or 'additional'.
+
+    Get current IDs from get_shopping_list. All IDs must exist before changes are made.
+    """
+    if item_type not in ("ingredient", "additional") or not ids:
+        raise ToolError("Provide IDs and item_type 'ingredient' or 'additional'.")
+    try:
+        api = await _get_service().client()
+        items = await (
+            api.get_ingredient_items() if item_type == "ingredient" else api.get_additional_items()
+        )
+        selected = [replace(x, is_owned=owned) for x in items if x.id in ids]
+        if set(ids) != {x.id for x in selected}:
+            raise ToolError("Some item IDs were not found; no items changed.")
+        result = await (
+            api.edit_ingredient_items_ownership(selected)
+            if item_type == "ingredient"
+            else api.edit_additional_items_ownership(selected)
+        )
+        return json.dumps([asdict(x) for x in result], ensure_ascii=False)
+    except ToolError:
+        raise
+    except Exception as e:
+        raise ToolError(f"Failed to update items: {e}") from e
+
+
+@mcp.tool(annotations=WRITE)
+async def rename_shopping_item(item_id: str, name: str) -> str:
+    """Rename a manually added item using its ID. Recipe ingredients cannot be renamed."""
+    if not name.strip():
+        raise ToolError("Name cannot be empty.")
+    try:
+        api = await _get_service().client()
+        items = await api.get_additional_items()
+        item = next((x for x in items if x.id == item_id), None)
+        if item is None:
+            raise ToolError("Additional item ID not found.")
+        return json.dumps(
+            [
+                asdict(x)
+                for x in await api.edit_additional_items([replace(item, name=name.strip())])
+            ],
+            ensure_ascii=False,
+        )
+    except ToolError:
+        raise
+    except Exception as e:
+        raise ToolError(f"Failed to rename item: {e}") from e
+
+
+@mcp.tool(annotations={**WRITE, "destructiveHint": True})
+async def remove_shopping_items(ids: list[str]) -> str:
+    """Remove manually added items by ID. Recipe ingredients are removed via their recipe."""
+    if not ids:
+        raise ToolError("Provide item IDs.")
+    try:
+        api = await _get_service().client()
+        await api.remove_additional_items(ids)
+        return "Items removed."
+    except Exception as e:
+        raise ToolError(f"Failed to remove items: {e}") from e
+
+
+@mcp.tool(annotations=WRITE)
+async def add_recipes_to_shopping_list(recipe_ids: list[str], custom: bool = False) -> str:
+    """Add ingredients for catalogue recipes, or custom recipes if custom is true."""
+    if not recipe_ids:
+        raise ToolError("Provide recipe IDs.")
+    try:
+        api = await _get_service().client()
+        items = await (
+            api.add_ingredient_items_for_custom_recipes(recipe_ids)
+            if custom
+            else api.add_ingredient_items_for_recipes(recipe_ids)
+        )
+        return json.dumps([asdict(x) for x in items], ensure_ascii=False)
+    except Exception as e:
+        raise ToolError(f"Failed to add recipe ingredients: {e}") from e
+
+
+@mcp.tool(annotations={**WRITE, "destructiveHint": True})
+async def remove_recipes_from_shopping_list(recipe_ids: list[str], custom: bool = False) -> str:
+    """Remove recipe ingredients from the list; custom selects custom recipes."""
+    if not recipe_ids:
+        raise ToolError("Provide recipe IDs.")
+    try:
+        api = await _get_service().client()
+        if custom:
+            await api.remove_ingredient_items_for_custom_recipes(recipe_ids)
+        else:
+            await api.remove_ingredient_items_for_recipes(recipe_ids)
+        return "Recipe ingredients removed."
+    except Exception as e:
+        raise ToolError(f"Failed to remove recipe ingredients: {e}") from e
+
+
+@mcp.tool(annotations={**WRITE, "destructiveHint": True})
+async def clear_shopping_list() -> str:
+    """Clear the entire shopping list, including ingredients and manually added items."""
+    try:
+        api = await _get_service().client()
+        await api.clear_shopping_list()
+        return "Shopping list cleared."
+    except Exception as e:
+        raise ToolError(f"Failed to clear shopping list: {e}") from e
 
 
 @mcp.prompt

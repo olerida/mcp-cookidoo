@@ -60,6 +60,14 @@ async def test_all_tools_registered():
         "generate_recipe_structure",
         "upload_custom_recipe",
         "update_custom_recipe",
+        "get_shopping_list",
+        "add_shopping_items",
+        "set_shopping_items_owned",
+        "rename_shopping_item",
+        "remove_shopping_items",
+        "add_recipes_to_shopping_list",
+        "remove_recipes_from_shopping_list",
+        "clear_shopping_list",
     }
     assert prompts == {"create_thermomix_recipe"}
 
