@@ -6,6 +6,7 @@ An MCP (Model Context Protocol) server for interacting with the Thermomix Cookid
 
 ## Features
 
+- **Shopping List**: Read and manage recipe ingredients and manually added items
 - **Recipe Search**: Find recipes by keywords and/or ingredients, with a maximum total time
 - **Recipe Details**: Fetch ingredients, steps and times of any Cookidoo recipe
 - **Custom Recipes**: List, read, create and update the recipes on your own account
@@ -31,6 +32,16 @@ cp .env.example .env   # then fill in your Cookidoo credentials
 
 ## Usage
 
+### Codex
+
+Register the local checkout as an MCP server (replace the path with your checkout):
+
+```bash
+codex mcp add cookidoo -- uv run --directory /path/to/mcp-cookidoo server.py
+```
+
+Restart Codex or start a new session to load the server. Keep `.env` in the checkout and set the country and language for your Cookidoo account.
+
 ### Claude Code
 
 ```bash
@@ -54,24 +65,32 @@ Add to `claude_desktop_config.json`:
 
 ### Docker
 
-A prebuilt image (amd64 / arm64) is published for each release, no Python needed:
+Build an image from this fork to include the shopping list tools:
+
+```bash
+docker build -t cookidoo-mcp .
+```
+
+Configure your MCP client to run the local image:
 
 ```json
 {
   "mcpServers": {
     "cookidoo": {
       "command": "docker",
-      "args": ["run", "--rm", "-i", "-e", "COOKIDOO_EMAIL", "-e", "COOKIDOO_PASSWORD", "ghcr.io/alexandrepa/mcp-cookidoo:1"],
+      "args": ["run", "--rm", "-i", "-e", "COOKIDOO_EMAIL", "-e", "COOKIDOO_PASSWORD", "-e", "COOKIDOO_COUNTRY", "-e", "COOKIDOO_LANGUAGE", "cookidoo-mcp"],
       "env": {
         "COOKIDOO_EMAIL": "your-email@example.com",
-        "COOKIDOO_PASSWORD": "your-password"
+        "COOKIDOO_PASSWORD": "your-password",
+        "COOKIDOO_COUNTRY": "es",
+        "COOKIDOO_LANGUAGE": "es-ES"
       }
     }
   }
 }
 ```
 
-To build it yourself instead: `docker build -t cookidoo-mcp .`
+The upstream `ghcr.io/alexandrepa/mcp-cookidoo` image does not include this fork's shopping list changes.
 
 ### HTTP / development
 
@@ -107,6 +126,8 @@ The shopping list tools provide access to recipe ingredients, associated recipes
 | `add_recipes_to_shopping_list` | Add ingredients from catalogue or custom recipes |
 | `remove_recipes_from_shopping_list` | Remove ingredients for catalogue or custom recipes |
 | `clear_shopping_list` | Remove the entire shopping list |
+
+`set_shopping_items_owned` takes a list of IDs, an `owned` boolean and an `item_type` of `ingredient` or `additional`. Recipe tools take a list of recipe IDs and a `custom` boolean (default `false`). `remove_shopping_items` applies to additional items only. `clear_shopping_list` clears the entire list.
 
 Recipe ingredients cannot be renamed or removed individually through these tools; remove their recipe instead. Availability of custom recipe operations may depend on the account. This integration uses an unofficial API and may break if Cookidoo changes.
 
